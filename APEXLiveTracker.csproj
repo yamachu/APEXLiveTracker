@@ -6,4 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Protobuf Include="Protos\events.proto" GrpcServices="Server"/>
+  </ItemGroup>
+
 </Project>
