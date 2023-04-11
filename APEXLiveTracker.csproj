@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Grpc.AspNetCore" Version="2.52.0"/>
+  </ItemGroup>
+
+  <ItemGroup>
     <Protobuf Include="Protos\events.proto" GrpcServices="Server"/>
   </ItemGroup>
 
