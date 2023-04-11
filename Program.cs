@@ -1,5 +1,7 @@
 using System.Net.WebSockets;
 using System.Threading.Channels;
+using Microsoft.Data.Sqlite;
+using Dapper;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +15,8 @@ app.UseWebSockets(new WebSocketOptions
 {
     KeepAliveInterval = TimeSpan.FromSeconds(10)
 });
+
+var connectionString = "Data Source=db/live_events.db;Pooling=true;";
 
 app.Use(async (context, next) =>
 {
@@ -38,14 +42,36 @@ app.Use(async (context, next) =>
 
             var consumer = Task.Run(async () =>
             {
+                using var conn = new SqliteConnection(connectionString);
+                await conn.OpenAsync();
                 while (await ch.Reader.WaitToReadAsync())
                 {
                     var (Id, RawEvent) = await ch.Reader.ReadAsync();
-                    // TODO: Write to db operation
-                    // Don't parse here, only write operation!
-                    var parsedEvent = Rtech.Liveapi.LiveAPIEvent.Parser.ParseFrom(RawEvent);
-                    Console.WriteLine($"Sender: {Id}, Value: {parsedEvent}");
+                    using (var transaction = await conn.BeginTransactionAsync())
+                    {
+                        try
+                        {
+                            await conn.ExecuteAsync(
+                                "INSERT INTO events (sender, raw) VALUES (@sender, @raw)",
+                                new { sender = Id, raw = RawEvent },
+                                transaction);
+                            await transaction.CommitAsync();
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.Error.WriteLine(ex);
+                            await transaction.RollbackAsync();
+                        }
+                    }
+                    // NOTE: FOR DEBUG ONLY, Don't parse here
+                    try
+                    {
+                        var parsedEvent = Rtech.Liveapi.LiveAPIEvent.Parser.ParseFrom(RawEvent);
+                        Console.WriteLine($"Sender: {Id}, Value: {parsedEvent}");
+                    }
+                    catch {}
                 }
+                await conn.CloseAsync();
             });
 
             var buffer = new byte[1024 * 4];
